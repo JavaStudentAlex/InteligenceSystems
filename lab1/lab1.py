@@ -5,7 +5,9 @@ import numpy as np
 
 
 def main_lab1():
-    return build_input_dataset(["wood", "cloth"], "../images")
+    classes = ["wood", "cloth", "tile", "brick"]
+    source = "../images"
+    return build_input_dataset(classes, source)
 
 
 def build_input_dataset(classes, source_dir):
