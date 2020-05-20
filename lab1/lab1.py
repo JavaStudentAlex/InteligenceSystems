@@ -1,38 +1,42 @@
+from itertools import product
 from skimage import io
-import os
-import fnmatch
+import pandas as pd
 import numpy as np
+import fnmatch
+import os
 
 
-def main_lab1():
-    classes = ["wood", "cloth", "tile", "brick"]
-    source = "../images"
-    return build_input_dataset(classes, source)
-
-
-def build_input_dataset(classes, source_dir):
-    result_dataset = {}
+def read_dataset(source_dir, classes, file_pattern):
     standard_shape = (50, 50, 3)
+
+    source_class_gen = make_images_sources(source_dir, classes, file_pattern)
+    dataset = build_dataset(source_class_gen, standard_shape)
+    return dataset
+
+
+def make_images_sources(source_dir, classes, file_pattern):
+    sources = list()
     for class_name in classes:
         full_paths_files_source_dir = (os.path.abspath("{}/{}".format(source_dir, file_name))
                                        for file_name in os.listdir(source_dir))
-        sources = fnmatch.filter(full_paths_files_source_dir, "*{}*.jpg".format(class_name))
-        result_dataset[class_name] = build_container_matrix(sources, standard_shape)
-    return result_dataset
+        class_sources = fnmatch.filter(full_paths_files_source_dir, file_pattern.format(class_name))
+        sources.extend(class_sources)
+        yield from product(class_sources, [class_name])
 
 
-def build_container_matrix(images, std_shape):
-    feature_vector_length = np.prod(std_shape)
-    container_matrix_shape = (len(images), feature_vector_length)
-    matrix = np.zeros(container_matrix_shape)
+def build_dataset(source_class_gen, std_shape):
+    columns = ["{}:{}:{}".format(*triple) for triple in product(range(1, std_shape[0] + 1),
+                                                                range(1, std_shape[1] + 1),
+                                                                range(1, std_shape[2] + 1))] + ["class"]
+    rows = list()
 
-    for image_index in range(len(images)):
-        image_name = images[image_index]
-        image_matrix = io.imread(image_name)
+    for image_path, class_name in source_class_gen:
+        feature_vector_length = np.prod(std_shape)
+        image_matrix = io.imread(image_path)
         cut_img = cut_image(image_matrix, std_shape)
         feature_vector = cut_img.reshape(feature_vector_length)
-        matrix[image_index] = feature_vector
-    return matrix
+        rows.append((*feature_vector, class_name))
+    return pd.DataFrame(data=rows, columns=columns)
 
 
 #cut image from the center
