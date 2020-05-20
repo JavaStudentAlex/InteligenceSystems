@@ -36,7 +36,7 @@ def build_dataset(source_class_gen, std_shape):
         cut_img = cut_image(image_matrix, std_shape)
         feature_vector = cut_img.reshape(feature_vector_length)
         rows.append((*feature_vector, class_name))
-    return pd.DataFrame(data=rows, columns=columns)
+    return pd.DataFrame(data=rows, columns=columns), columns[:-1]
 
 
 #cut image from the center
