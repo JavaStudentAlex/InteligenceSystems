@@ -1,5 +1,7 @@
+from math import log2
 import pandas as pd
 import numpy as np
+
 
 
 class IEIModel:
@@ -12,6 +14,7 @@ class IEIModel:
         self.__target = target
         self.__classes = {*np.unique(train_data[self.__target].values)}
         self.__train(train_data)
+        self.__report()
 
     def __train(self, train_data):
         most_freq_class = train_data[self.__target].mode().values[0]
@@ -19,6 +22,7 @@ class IEIModel:
         binarized_dataset = self.__build_bin_feature_matrix(train_data)
         self.__centers = self.__build_standard_bin_classes_vectors(binarized_dataset)
         neighbours = self.__define_neighbours()
+        self.__radiuses = self.__build_optimal_classes_radiuses(binarized_dataset, neighbours)
 
     def __build_cont_tolerance_field(self, dataset, most_freq_class):
         values_matrix = dataset.loc[dataset[self.__target] == most_freq_class, self.__features].values
@@ -59,19 +63,89 @@ class IEIModel:
         neighbours = dict()
         for class_name in self.__classes:
             other_classes = self.__classes.difference({class_name})
-            neighbour_name = self.__get_neighbour(class_name, other_classes)
+            neighbour_name = self.__find_neighbour_for_current_class(class_name, other_classes)
             neighbours[class_name] = neighbour_name
         return neighbours
 
-    def __get_neighbour(self, target_class_name, other_classes):
+    def __find_neighbour_for_current_class(self, target_class_name, other_classes):
         this_class_center = self.__centers.loc[target_class_name]
         distances = dict()
         for current_other_class_name in other_classes:
             current_other_class_center = self.__centers.loc[current_other_class_name]
-            hemming_distance = len(np.where(this_class_center != current_other_class_center)[0])
+            hemming_distance = self.__calc_hemming_distance(this_class_center,
+                                                            current_other_class_center)
             distances[current_other_class_name] = hemming_distance
         dists_frame = pd.DataFrame.from_dict(distances, orient="index", columns=["0"])
         return dists_frame["0"].idxmin()
+
+    def __calc_hemming_distance(self, vector_1, vector_2):
+        return len(np.where(vector_1 != vector_2)[0])
+
+    def __build_optimal_classes_radiuses(self, bin_dataset, neighbours):
+        radiuses = dict()
+        for cur_class_name in self.__classes:
+            nghbr_class_name = neighbours[cur_class_name]
+
+            cur_class_center = self.__centers.loc[cur_class_name].values
+            cur_class_msrs_matrix = self.__get_measures(cur_class_name, bin_dataset)
+            nghbr_class_msrs_matrix = self.__get_measures(nghbr_class_name, bin_dataset)
+
+            radiuses[cur_class_name] = self.__calc_optimal_radius(cur_class_center, cur_class_msrs_matrix,
+                                                                         nghbr_class_msrs_matrix)
+        return radiuses
+
+    def __get_measures(self, class_name, bin_dataset):
+        return bin_dataset.loc[bin_dataset[self.__target] == class_name, self.__features].values
+
+    def __calc_optimal_radius(self, goal_class_center, goal_class_matrix, neighbour_class_matrix):
+        cases = dict()
+        feature_number = goal_class_matrix.shape[1]
+
+        for radius in range(1, feature_number+1):
+            best_func_efficiency_coof = self.__calc_inf_efficiency_coefficient(radius,
+                                                                               goal_class_center,
+                                                                               goal_class_matrix,
+                                                                               neighbour_class_matrix)
+            cases[radius] = best_func_efficiency_coof
+
+        result_radius = pd.DataFrame.from_dict(cases, orient="index").idxmax()
+        return result_radius, cases[result_radius]
+
+    def __calc_inf_efficiency_coefficient(self, radius, goal_class_center,
+                                          cur_class_matrix, nghbr_class_matrix):
+        cur_in, cur_out = self.__calc_how_many_in_out_measures(radius, goal_class_center, cur_class_matrix)
+        nghbr_in, nghbr_out = self.__calc_how_many_in_out_measures(radius, goal_class_center, nghbr_class_matrix)
+        return self.__calc_shannon_criteria(cur_in, cur_out, nghbr_in, nghbr_out)
+
+    def __calc_how_many_in_out_measures(self, radius, center, measures):
+        in_measures = 0
+        out_measures = 0
+
+        for measure in measures:
+            hemming_dist = self.__calc_hemming_distance(measure, center)
+            if hemming_dist <= radius:
+                in_measures += 1
+            else:
+                out_measures += 1
+        return in_measures, out_measures
+
+    def __calc_shannon_criteria(self, k1, k2, k3, k4):
+        def n_log_n(k, p):
+            n = k / (k + p)
+            return n * log2(n)
+        if k1 == 0 or k4 == 0:
+            return 0
+
+        return 1 + 1/2 * (n_log_n(k1, k3) + n_log_n(k2, k4) + n_log_n(k3, k1) + n_log_n(k4, k2))
+
+    def __report(self):
+        print("Model was built with {} :".format(len(self.__classes)))
+        for class_name in self.__classes:
+            print("{} class with {} radius".format(class_name, self.__radiuses[class_name]))
+
+
+
+        
 
 
 
