@@ -1,40 +1,33 @@
-from math import log2
-import pandas as pd
 import numpy as np
+import pandas as pd
+from math import log2
 
 
-class IEIModel:
+class Coach:
 
-    __tolerance_dist = 20
-    __sel_level = 0.5
+    __set_level = 0.5
 
-    def __init__(self, train_data, features, target):
+    def __init__(self, train_data, features, target, mean, tol_dist):
         self.__features = features
         self.__target = target
         self.__classes = {*np.unique(train_data[self.__target].values)}
-        self.__train(train_data)
-        self.__report()
+        self.tol_dist_field_bottom_vals = mean - tol_dist
+        self.tol_dist_field_top_vals = mean + tol_dist
+        self.tol_dists = tol_dist
+        self.__learn(train_data)
 
-    def __train(self, train_data):
-        most_freq_class = train_data[self.__target].mode().values[0]
-        self.__cont_tol_interval = self.__build_cont_tolerance_field(train_data, most_freq_class)
+    def __learn(self, train_data):
         binarized_dataset = self.__build_bin_feature_matrix(train_data)
         self.__centers = self.__build_standard_bin_classes_vectors(binarized_dataset)
         neighbours = self.__define_neighbours()
-        self.__radiuses, self.__coeffs = self.__build_optimal_classes_radiuses(binarized_dataset, neighbours)
-
-    def __build_cont_tolerance_field(self, dataset, most_freq_class):
-        values_matrix = dataset.loc[dataset[self.__target] == most_freq_class, self.__features].values
-        measure_number = values_matrix.shape[0]
-        mean_feature_vals = np.sum(values_matrix, axis=0) / measure_number
-        return mean_feature_vals - self.__tolerance_dist, mean_feature_vals + self.__tolerance_dist
+        self.radiuses, self.coeffs = self.__build_optimal_classes_radiuses(binarized_dataset, neighbours)
 
     def __build_bin_feature_matrix(self, dataset):
         val_matrix = dataset[self.__features].values
         bin_val_matrix = np.zeros(shape=val_matrix.shape)
 
-        positions = np.where((val_matrix > self.__cont_tol_interval[0]) &
-                             (val_matrix < self.__cont_tol_interval[1]))
+        positions = np.where((val_matrix > self.tol_dist_field_bottom_vals) &
+                             (val_matrix < self.tol_dist_field_top_vals))
         bin_val_matrix[positions] = 1
 
         bin_dataset = dataset.copy()
@@ -54,7 +47,7 @@ class IEIModel:
     def __calc_container_center(self, matrix):
         mean_bin_vals = np.sum(matrix, axis=0) / matrix.shape[0]
         cur_cont_center = np.zeros(matrix.shape[1])
-        units_positions = np.where(mean_bin_vals > self.__sel_level)
+        units_positions = np.where(mean_bin_vals > self.__set_level)
         cur_cont_center[units_positions] = 1
         return cur_cont_center
 
@@ -82,7 +75,7 @@ class IEIModel:
 
     def __build_optimal_classes_radiuses(self, bin_dataset, neighbours):
         radiuses = dict()
-        func_eff_coefs=dict()
+        func_eff_coefs = dict()
         for cur_class_name in self.__classes:
             nghbr_class_name = neighbours[cur_class_name]
 
@@ -137,39 +130,5 @@ class IEIModel:
         r = -5
         return 1/n * log2((2 * n + pow(10, r) - k2 - k3) / (k2 + k3 + pow(10, r))) * (n - k2 - k3)
 
-    def __report(self):
-        print("Model was built with {} classes:".format(len(self.__classes)))
-        for class_name in self.__classes:
-            print("{} class with {} radius and {} KFE".format(class_name,
-                                                              self.__radiuses.loc[class_name, "radius"],
-                                                              self.__coeffs.loc[class_name, "KFE"]))
-
-    def exam(self, dataset):
-        predicted_classes = list()
-        bin_dataset = self.__build_bin_feature_matrix(dataset)
-        for measure_idx in bin_dataset.index:
-            pred_class = self.__define_class(bin_dataset.loc[measure_idx, self.__features])
-            predicted_classes.append(pred_class)
-        return predicted_classes
-
-    def __define_class(self, feature_vector):
-        belong_func_vals = dict()
-        for class_name in self.__classes:
-            center = self.__centers.loc[class_name, self.__features]
-            radius = self.__radiuses.loc[class_name, "radius"]
-            hemming_dist = self.__calc_hemming_distance(feature_vector, center)
-            bel_func_val = 1 - hemming_dist / radius
-            if bel_func_val > 0:
-                belong_func_vals[class_name] = bel_func_val
-        if len(belong_func_vals.keys()) == 0:
-            return "no of these classes"
-        return pd.DataFrame.from_dict(belong_func_vals, orient="index").idxmax().values[0]
-
-
-
-
-        
-
-
-
-
+    def get_overall_KFE(self):
+        return self.coeffs["KFE"].mean()

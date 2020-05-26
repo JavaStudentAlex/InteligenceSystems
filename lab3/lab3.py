@@ -1,4 +1,4 @@
-from lab2.lab2 import main_lab2
+from models_module.Model import main_lab2
 import numpy as np
 
 sel_level = 0.5
