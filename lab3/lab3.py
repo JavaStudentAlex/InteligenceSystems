@@ -1,4 +1,4 @@
-from models_module.Model import main_lab2
+from models_module.IEI import main_lab2
 import numpy as np
 
 sel_level = 0.5

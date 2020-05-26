@@ -1,5 +1,5 @@
 from prepare_package.prepare_module import read_dataset
-from models_module.Model import IEIModel
+from models_module.IEI import IEIModelAPI
 from datetime import datetime as dt
 
 start = dt.now()

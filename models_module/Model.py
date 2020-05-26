@@ -1,80 +1,134 @@
-import pandas as pd
 import numpy as np
-from models_module.Coach import Coach
-from concurrent.futures import ThreadPoolExecutor
+import pandas as pd
+from math import log2
 
 
-class IEIModel:
+class Model:
 
-    __tolerance_dist_start = 20
+    __set_level = 0.5
 
-    def __init__(self, train_data, features, target):
+    def __init__(self, train_data, features, target, mean, tol_dist):
         self.__features = features
         self.__target = target
         self.__classes = {*np.unique(train_data[self.__target].values)}
-        self.__train(train_data)
-        self.__report()
+        self.tol_dist_field_bottom_vals = mean - tol_dist
+        self.tol_dist_field_top_vals = mean + tol_dist
+        self.tol_dists = tol_dist
+        self.__learn(train_data)
 
-    def __train(self, train_data):
-        base_class = train_data[self.__target].mode().values[0]
-        mean_base_class_val = self.__mean_base_class_values(train_data, base_class)
+    def __learn(self, train_data):
+        binarized_dataset = self.__build_bin_feature_matrix(train_data)
+        self.__centers = self.__build_standard_bin_classes_vectors(binarized_dataset)
+        neighbours = self.__define_neighbours()
+        self.radiuses, self.coeffs = self.__build_optimal_classes_radiuses(binarized_dataset, neighbours)
 
-        features_len = len(mean_base_class_val)
+    def __build_bin_feature_matrix(self, dataset):
+        val_matrix = dataset[self.__features].values
+        bin_val_matrix = np.zeros(shape=val_matrix.shape)
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            for feature_number in range(features_len):
-                executor.submit(IEIModel.optimize_feature,
-                                train_data,
-                                self.__features,
-                                self.__target,
-                                self.__tolerance_dist_start,
-                                feature_number,
-                                mean_base_class_val)
+        positions = np.where((val_matrix > self.tol_dist_field_bottom_vals) &
+                             (val_matrix < self.tol_dist_field_top_vals))
+        bin_val_matrix[positions] = 1
 
+        bin_dataset = dataset.copy()
+        bin_dataset[self.__features] = bin_val_matrix
 
-    @staticmethod
-    def optimize_feature(data, features, target, dist_start, feature_index, features_mean):
+        return bin_dataset
 
-        tol_dist_start_vals = np.array([dist_start] * len(features))
-        top_feature_val = int(features_mean[feature_index] / 2)
-
-        max_kfe = float("-inf")
-        optimal_val = None
-
-        for tol_dist_for_feature in range(dist_start, top_feature_val + 1):
-            tol_dist_start_vals[feature_index] = tol_dist_for_feature
-
-            coach = Coach(data, features, target, features_mean, tol_dist_start_vals)
-
-            if coach.get_overall_KFE() > max_kfe:
-                optimal_val = tol_dist_for_feature
-
-        print("for {} feature is {} optimal value",feature_index, optimal_val )
-        return {features[feature_index]: optimal_val}
-
-    def __calc_bottom_up_top(self, means, tol_radiuses):
-        return means - tol_radiuses, means + tol_radiuses
-
-
-    def __mean_base_class_values(self, dataset, most_freq_class):
-        values_matrix = dataset.loc[dataset[self.__target] == most_freq_class, self.__features].values
-        measure_number = values_matrix.shape[0]
-        mean_feature_vals = np.sum(values_matrix, axis=0) / measure_number
-        return mean_feature_vals
-
-    def __report(self):
-        print("Model was built with {} classes:".format(len(self.__classes)))
+    def __build_standard_bin_classes_vectors(self, binarized_dataset):
+        centers = {}
         for class_name in self.__classes:
-            print("{} class with {} radius and {} KFE".format(class_name,
-                                                              self.__coach.radiuses.loc[class_name, "radius"],
-                                                              self.__coach.coeffs.loc[class_name, "KFE"]))
-            print("Tol interval ditance is :\n{}".format(self.__coach.tol_dists))
+            class_matrix = binarized_dataset.loc[binarized_dataset[self.__target] == class_name,
+                                                   self.__features].values
+            cont_center = self.__calc_container_center(class_matrix)
+            centers[class_name] = cont_center
+        return pd.DataFrame.from_dict(centers, orient="index", columns=self.__features)
 
+    def __calc_container_center(self, matrix):
+        mean_bin_vals = np.sum(matrix, axis=0) / matrix.shape[0]
+        cur_cont_center = np.zeros(matrix.shape[1])
+        units_positions = np.where(mean_bin_vals > self.__set_level)
+        cur_cont_center[units_positions] = 1
+        return cur_cont_center
 
+    def __define_neighbours(self):
+        neighbours = dict()
+        for class_name in self.__classes:
+            other_classes = self.__classes.difference({class_name})
+            neighbour_name = self.__find_neighbour_for_current_class(class_name, other_classes)
+            neighbours[class_name] = neighbour_name
+        return neighbours
 
+    def __find_neighbour_for_current_class(self, target_class_name, other_classes):
+        this_class_center = self.__centers.loc[target_class_name]
+        distances = dict()
+        for current_other_class_name in other_classes:
+            current_other_class_center = self.__centers.loc[current_other_class_name]
+            hemming_distance = self.__calc_hemming_distance(this_class_center,
+                                                            current_other_class_center)
+            distances[current_other_class_name] = hemming_distance
+        dists_frame = pd.DataFrame.from_dict(distances, orient="index", columns=["0"])
+        return dists_frame["0"].idxmin()
 
-        
+    def __calc_hemming_distance(self, vector_1, vector_2):
+        return len(np.where(vector_1 != vector_2)[0])
 
+    def __build_optimal_classes_radiuses(self, bin_dataset, neighbours):
+        radiuses = dict()
+        func_eff_coefs = dict()
+        for cur_class_name in self.__classes:
+            nghbr_class_name = neighbours[cur_class_name]
 
+            cur_class_center = self.__centers.loc[cur_class_name].values
+            cur_class_msrs_matrix = self.__get_measures(cur_class_name, bin_dataset)
+            nghbr_class_msrs_matrix = self.__get_measures(nghbr_class_name, bin_dataset)
 
+            radiuses[cur_class_name], func_eff_coefs[cur_class_name] = self.__calc_optimal_radius(cur_class_center,
+                                                                                                  cur_class_msrs_matrix,
+                                                                                                  nghbr_class_msrs_matrix)
 
+        return pd.DataFrame.from_dict(radiuses, orient="index", columns=["radius"]), \
+               pd.DataFrame.from_dict(func_eff_coefs, orient="index", columns=["KFE"])
+
+    def __get_measures(self, class_name, bin_dataset):
+        return bin_dataset.loc[bin_dataset[self.__target] == class_name, self.__features].values
+
+    def __calc_optimal_radius(self, goal_class_center, goal_class_matrix, neighbour_class_matrix):
+        cases = dict()
+        feature_number = goal_class_matrix.shape[1]
+
+        for radius in range(1, feature_number+1):
+            best_func_efficiency_coof = self.__calc_inf_efficiency_coefficient(radius,
+                                                                               goal_class_center,
+                                                                               goal_class_matrix,
+                                                                               neighbour_class_matrix)
+            cases[radius] = best_func_efficiency_coof
+
+        result_radius = pd.DataFrame.from_dict(cases, orient="index").idxmax().values[0]
+        return result_radius, cases[result_radius]
+
+    def __calc_inf_efficiency_coefficient(self, radius, goal_class_center,
+                                          cur_class_matrix, nghbr_class_matrix):
+        cur_in, cur_out = self.__calc_how_many_in_out_measures(radius, goal_class_center, cur_class_matrix)
+        nghbr_in, nghbr_out = self.__calc_how_many_in_out_measures(radius, goal_class_center, nghbr_class_matrix)
+        return self.__calc_KFE_criteria(cur_in, cur_out, nghbr_in, nghbr_out)
+
+    def __calc_how_many_in_out_measures(self, radius, center, measures):
+        in_measures = 0
+        out_measures = 0
+
+        for measure in measures:
+            hemming_dist = self.__calc_hemming_distance(measure, center)
+            if hemming_dist <= radius:
+                in_measures += 1
+            else:
+                out_measures += 1
+        return in_measures, out_measures
+
+    def __calc_KFE_criteria(self, k1, k2, k3, k4):
+        n = k1 + k2 + k3 + k4
+        r = -5
+        return 1/n * log2((2 * n + pow(10, r) - k2 - k3) / (k2 + k3 + pow(10, r))) * (n - k2 - k3)
+
+    def get_overall_KFE(self):
+        return self.coeffs["KFE"].mean()
