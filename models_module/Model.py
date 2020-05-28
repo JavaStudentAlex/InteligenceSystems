@@ -1,12 +1,15 @@
 import numpy as np
 import pandas as pd
 from math import log2
+from matplotlib import pyplot as plt
 
 
 class Model:
     __sel_level = 0.5
 
-    def __init__(self, train_data, features, target, mean_base_class_vals, tol_interval_delta):
+    def __init__(self, train_data, features, target, mean_base_class_vals, tol_interval_delta, with_report=False):
+        self.__with_report = with_report
+
         # save key properties
         self.__features = features
         self.__target = target
@@ -25,6 +28,12 @@ class Model:
         self.__centers = self.__build_standard_bin_classes_vectors(binarized_dataset)
         neighbours = self.__define_neighbours()
         self.__radiuses, self.__coefs = self.__build_optimal_classes_radiuses(binarized_dataset, neighbours)
+
+        if self.__with_report:
+            for class_name in self.__classes:
+                print("Class {} with radius {} and KFE {}".format(class_name,
+                                                                  self.__radiuses.loc[class_name, "radius"],
+                                                                  self.__coefs.loc[class_name, "KFE"]))
 
     def __build_bin_feature_matrix(self, dataset):
         val_matrix = dataset[self.__features].values
@@ -116,7 +125,10 @@ class Model:
         radiuses = dict()
         func_eff_coefs = dict()
 
-        for cur_class_name in self.__classes:
+        # styles for plotting
+        styles = ["g", "b", "r", "y"]
+
+        for cur_class_name, style in zip(self.__classes, styles):
             nghbr_class_name = neighbours[cur_class_name]
 
             cur_class_center = self.__centers.loc[cur_class_name].values
@@ -125,7 +137,16 @@ class Model:
 
             radiuses[cur_class_name], func_eff_coefs[cur_class_name] = self.__calc_optimal_radius(cur_class_center,
                                                                                                   cur_class_msrs_matrix,
-                                                                                                  nghbr_class_msrs_matrix)
+                                                                                                  nghbr_class_msrs_matrix,
+                                                                                                  style,
+                                                                                                  cur_class_name)
+        # if user need report then show the graph
+        if self.__with_report:
+            plt.title("Dependence of KFE from radius value")
+            plt.xlabel("Radius")
+            plt.ylabel("KFE value")
+            plt.legend()
+            plt.show()
 
         return pd.DataFrame.from_dict(radiuses, orient="index", columns=["radius"]), \
                pd.DataFrame.from_dict(func_eff_coefs, orient="index", columns=["KFE"])
@@ -133,7 +154,12 @@ class Model:
     def __get_measures(self, class_name, bin_dataset):
         return bin_dataset.loc[bin_dataset[self.__target] == class_name, self.__features].values
 
-    def __calc_optimal_radius(self, goal_class_center, goal_class_matrix, neighbour_class_matrix):
+    def __calc_optimal_radius(self, goal_class_center, goal_class_matrix, neighbour_class_matrix, style, class_name):
+        # func for building plot
+        def build_plot():
+            radiuses = np.array(list(cases.keys()))
+            KFEs = np.array(list(cases.values()))
+            plt.plot(radiuses, KFEs, style, label=class_name)
 
 
         cases = dict()
@@ -145,6 +171,10 @@ class Model:
                                                                                goal_class_matrix,
                                                                                neighbour_class_matrix)
             cases[radius] = best_func_efficiency_coof
+
+        # it is not optimizing iteration, it is general container
+        if self.__with_report:
+            build_plot()
 
         result_radius = pd.DataFrame.from_dict(cases, orient="index").idxmax().values[0]
         return result_radius, cases[result_radius]

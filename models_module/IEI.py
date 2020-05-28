@@ -56,7 +56,7 @@ class IEIModelAPI:
         best_delta = deltas_kfe_frame["KFE"].idxmax()
 
         # construct the final model through the optimal delta
-        self.__model = self.__create_model(train_data, mean_base_class_val, best_delta)
+        self.__model = self.__create_model(train_data, mean_base_class_val, best_delta, with_report=True)
 
         print("Model builded with {} delta and {} KFE ".format(best_delta, self.__model.get_overall_KFE()))
 
@@ -106,10 +106,10 @@ class IEIModelAPI:
             delta_kfe[cur_delta] = kfe
         return delta_kfe
 
-    def __create_model(self, data, mean_base_class_vals, delta):
+    def __create_model(self, data, mean_base_class_vals, delta, with_report=False):
         features_len = len(mean_base_class_vals)
         deltas_vector = np.array([delta] * features_len)
-        return Model(data, self.__features, self.__target, mean_base_class_vals, deltas_vector)
+        return Model(data, self.__features, self.__target, mean_base_class_vals, deltas_vector, with_report)
 
     def predict(self, data):
         return self.__model.classify(data)
