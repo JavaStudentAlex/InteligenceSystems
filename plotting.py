@@ -15,7 +15,7 @@ def plot_class(dataset, class_name, style):
     plt.plot([*x, x_mean], [*y, y_mean], style, label=class_name)
 
 
-source_dir = "./images"
+source_dir = "images_for_labs"
 classes = ["wood", "cloth", "tile", "brick"]
 plotting_styles = ["ro", "g^", "b+", "bs"]
 file_pattern = "*{}*.jpg"

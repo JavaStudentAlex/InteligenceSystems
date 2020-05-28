@@ -7,15 +7,14 @@ import os
 
 
 # high level function for building dataset
-def read_dataset(source_dir, classes, file_pattern):
-    standard_shape = (50, 50, 3)
+def read_dataset(source_dir, classes, file_pattern, standard_shape):
 
     source_class_gen = make_images_sources(source_dir, classes, file_pattern)
     dataset = build_dataset(source_class_gen, standard_shape)
     return dataset
 
 
-# read the source directory content and return all pathes of classes images
+# read the source directory content and return all pathes of classes images_for_labs
 def make_images_sources(source_dir, classes, file_pattern):
     sources = list()
     for class_name in classes:
@@ -75,11 +74,3 @@ def calc_size(std_vals, real_vals, axis_index):
     real_param = real_vals[axis_index]
     std_param = std_vals[axis_index]
     return std_param if real_param - std_param > 0 else real_param
-
-
-source_dir = "./images"
-classes = ["wood", "cloth", "tile", "brick"]
-file_pattern = "*{}*.jpg"
-
-# get the dataset from files in pandas data frame format
-dataset, features = read_dataset(source_dir, classes, file_pattern)

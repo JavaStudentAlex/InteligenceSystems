@@ -61,6 +61,9 @@ class IEIModelAPI:
         print("Model builded with {} delta and {} KFE ".format(best_delta, self.__model.get_overall_KFE()))
 
         plt.plot(deltas_kfe_frame.index, deltas_kfe_frame["KFE"].values)
+        plt.title("Dependence of KFE from the delta value")
+        plt.xlabel("delta")
+        plt.ylabel("KFE")
         plt.show()
 
     def __mean_base_class_values(self, dataset, most_freq_class):
