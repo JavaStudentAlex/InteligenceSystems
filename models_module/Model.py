@@ -180,6 +180,9 @@ class Model:
         criteria_result = log2((2 + pow(10, r) - alpha - beta) / (alpha + beta + pow(10, r))) * (1 - alpha - beta)
         return criteria_result
 
+    def get_overall_KFE(self):
+        return self.__coefs["KFE"].mean()
+
     def classify(self, dataset):
         predicted_classes = list()
 
