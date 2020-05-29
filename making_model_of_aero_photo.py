@@ -1,9 +1,6 @@
 from prepare_package.prepare_module import read_dataset
 from models_module.IEI import IEIModelAPI
-from datetime import datetime as dt
 import pickle as pkl
-
-start = dt.now()
 
 # where small images situated
 source_dir = "aero_photo_train"
@@ -25,6 +22,3 @@ model = IEIModelAPI(dataset, features, "class")
 with open("{}/{}.pkl".format(target_dir_for_bin_model, "model"), "wb") as bin_model_file:
     pkl.dump(model, bin_model_file, protocol=pkl.HIGHEST_PROTOCOL)
 
-finish = dt.now()
-
-print(finish - start)
