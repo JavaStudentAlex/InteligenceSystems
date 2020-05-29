@@ -2,11 +2,8 @@ import pickle as pkl
 from prepare_package.prepare_module import make_columns
 from split_image import split_the_image_in_boxes
 import pandas as pd
-from datetime import datetime as dt
 from skimage.io import imsave
 import numpy as np
-
-start = dt.now()
 
 
 def make_frame_of_images_matrices(matrices, features_columns):

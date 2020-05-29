@@ -78,3 +78,4 @@ def calc_size(std_vals, real_vals, axis_index):
     real_param = real_vals[axis_index]
     std_param = std_vals[axis_index]
     return std_param if real_param - std_param > 0 else real_param
+
