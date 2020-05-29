@@ -41,6 +41,8 @@ class IEIModelAPI:
         futures = list()
         delta_kfe_pairs = dict()
 
+        print(self.__tolerance_dist_start, top_delta_border)
+
         # make parallel processing
         with ThreadPoolExecutor(max_workers=chunks) as executor:
             for delta_gen in generators:
@@ -99,6 +101,7 @@ class IEIModelAPI:
         delta_kfe = dict()
 
         for cur_delta in deltas_generator:
+            print(cur_delta)
 
             # create model for current delta abd get KFE
             model = self.__create_model(data, mean_base_class_vals, cur_delta)
