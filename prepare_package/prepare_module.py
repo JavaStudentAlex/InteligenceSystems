@@ -28,9 +28,7 @@ def make_images_sources(source_dir, classes, file_pattern):
 # read each image, cut it for standard size, reshape for feature vector form (1 * features)
 # and insert into the DataFrame also with the class label
 def build_dataset(source_class_gen, std_shape):
-    columns = ["{}:{}:{}".format(*triple) for triple in product(range(1, std_shape[0] + 1),
-                                                                range(1, std_shape[1] + 1),
-                                                                range(1, std_shape[2] + 1))] + ["class"]
+    columns = make_columns(std_shape) + ["class"]
     rows = list()
 
     for image_path, class_name in source_class_gen:
@@ -40,6 +38,12 @@ def build_dataset(source_class_gen, std_shape):
         feature_vector = cut_img.reshape(feature_vector_length)
         rows.append((*feature_vector, class_name))
     return pd.DataFrame(data=rows, columns=columns), columns[:-1]
+
+
+def make_columns(std_shape):
+    return ["{}:{}:{}".format(*triple) for triple in product(range(1, std_shape[0] + 1),
+                                                             range(1, std_shape[1] + 1),
+                                                             range(1, std_shape[2] + 1))]
 
 
 # cut standard image size from the center

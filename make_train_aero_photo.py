@@ -12,3 +12,4 @@ for small_image in image_boxes:
     path_to_save = "{}/{}.jpg".format(parent_dir, dt.now())
     io.imsave(path_to_save, small_image)
 
+
